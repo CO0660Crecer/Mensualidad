@@ -337,7 +337,7 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
             </label>
             <input
               type="number"
-              step="1000000"
+              step="1000"
               min="0"
               value={formData.amount}
               onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
