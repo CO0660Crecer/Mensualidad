@@ -45,7 +45,7 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
       setFormData(prev => ({
         ...prev,
         payment_date: today,
-        amount: '3000000',
+        amount: '3000',
         months: [currentMonth]
       }))
     }
@@ -142,7 +142,7 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
     setFormData(prev => ({
       ...prev,
       participant_ids: newParticipantIds,
-      amount: (3000000 * newParticipantIds.length * prev.months.length).toString()
+      amount: (3000 * newParticipantIds.length * prev.months.length).toString()
     }))
   }
 
@@ -154,7 +154,7 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
     setFormData(prev => ({
       ...prev,
       months: newMonths,
-      amount: (3000000 * prev.participant_ids.length * newMonths.length).toString()
+      amount: (3000 * prev.participant_ids.length * newMonths.length).toString()
     }))
   }
 
@@ -193,7 +193,7 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
   useEffect(() => {
     setFormData(prev => ({
       ...prev,
-      amount: (3000000 * prev.participant_ids.length * prev.months.length).toString()
+      amount: (3000 * prev.participant_ids.length * prev.months.length).toString()
     }))
   }, [formData.months.length, formData.participant_ids.length])
 
@@ -342,12 +342,12 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
               value={formData.amount}
               onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              placeholder="3000000"
+              placeholder="3000"
               required
             />
             {(formData.months.length > 1 || formData.participant_ids.length > 1) && (
               <p className="text-sm text-gray-500 mt-1">
-                {formatCurrency(3000000)} × {formData.participant_ids.length} participantes × {formData.months.length} meses = {formatCurrency(3000000 * formData.participant_ids.length * formData.months.length)}
+                {formatCurrency(3000)} × {formData.participant_ids.length} participantes × {formData.months.length} meses = {formatCurrency(3000 * formData.participant_ids.length * formData.months.length)}
               </p>
             )}
           </div>
