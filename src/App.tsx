@@ -11,6 +11,7 @@ import { PaymentList } from './components/Payments/PaymentList'
 import { PaymentForm } from './components/Payments/PaymentForm'
 import { Reports } from './components/Reports/Reports'
 import { Management } from './components/Management/Management'
+import { Consolidado } from './components/Consolidado/Consolidado'
 import { Participant, Payment } from './lib/supabase'
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
   const [activeView, setActiveView] = useState('dashboard')
   const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null)
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
+  const [preselectedParticipant, setPreselectedParticipant] = useState<Participant | null>(null)
   const [showParticipantForm, setShowParticipantForm] = useState(false)
   const [showBulkUploadForm, setShowBulkUploadForm] = useState(false)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
@@ -35,7 +37,19 @@ function App() {
   }
 
   const handleEditPayment = (payment?: Payment) => {
-    setEditingPayment(payment || null)
+    if (payment) {
+      setEditingPayment(payment)
+      setPreselectedParticipant(null)
+    } else {
+      setEditingPayment(null)
+      setPreselectedParticipant(null)
+    }
+    setShowPaymentForm(true)
+  }
+
+  const handleRegisterPaymentForParticipant = (participant: Participant) => {
+    setEditingPayment(null)
+    setPreselectedParticipant(participant)
     setShowPaymentForm(true)
   }
 
@@ -51,6 +65,7 @@ function App() {
   const handleClosePaymentForm = () => {
     setShowPaymentForm(false)
     setEditingPayment(null)
+    setPreselectedParticipant(null)
   }
 
   const handleSaveParticipant = () => {
@@ -84,6 +99,8 @@ function App() {
         return <ParticipantList onEditParticipant={handleEditParticipant} onBulkUpload={handleBulkUpload} />
       case 'payments':
         return <PaymentList onEditPayment={handleEditPayment} />
+      case 'consolidado':
+        return <Consolidado onRegisterPayment={handleRegisterPaymentForParticipant} />
       case 'reports':
         return <Reports />
       case 'management':
@@ -121,6 +138,7 @@ function App() {
       {showPaymentForm && (
         <PaymentForm
           payment={editingPayment}
+          preselectedParticipant={preselectedParticipant}
           onClose={handleClosePaymentForm}
           onSave={handleSavePayment}
         />

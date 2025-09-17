@@ -251,7 +251,7 @@ export function Management() {
             <div className="bg-green-50 p-3 rounded-lg">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-green-800">Cuota mensual actual:</span>
-                <span className="text-lg font-bold text-green-600">{formatCurrency(300)}</span>
+                <span className="text-lg font-bold text-green-600">{formatCurrency(3000)}</span>
               </div>
             </div>
             <div className="bg-blue-50 p-3 rounded-lg">

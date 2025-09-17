@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Users, DollarSign, TrendingUp, AlertTriangle } from 'lucide-react'
+import { Users, DollarSign, TrendingUp, AlertTriangle, Eye, X, CheckCircle, XCircle } from 'lucide-react'
 import { StatCard } from './StatCard'
-import { supabase, PaymentStats } from '../../lib/supabase'
+import { supabase, PaymentStats, Participant, Payment } from '../../lib/supabase'
 
 export function Dashboard() {
   const [stats, setStats] = useState<PaymentStats>({
@@ -12,6 +12,10 @@ export function Dashboard() {
     totalPending: 0
   })
   const [loading, setLoading] = useState(true)
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [paidParticipants, setPaidParticipants] = useState<Participant[]>([])
+  const [unpaidParticipants, setUnpaidParticipants] = useState<Participant[]>([])
+  const [detailLoading, setDetailLoading] = useState(false)
 
   useEffect(() => {
     loadStats()
@@ -50,7 +54,7 @@ export function Dashboard() {
         .eq('is_active', true)
 
       const totalMonthlyFees = participants?.reduce((sum, p) => sum + p.monthly_fee, 0) || 0
-      const totalPending = pendingThisMonth * (totalMonthlyFees / (totalParticipants || 1))
+      const totalPending = pendingThisMonth * 3000
 
       setStats({
         totalParticipants: totalParticipants || 0,
@@ -63,6 +67,42 @@ export function Dashboard() {
       console.error('Error loading stats:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadPaymentDetails = async () => {
+    setDetailLoading(true)
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM
+
+      // Get all active participants
+      const { data: allParticipants } = await supabase
+        .from('participants')
+        .select('*')
+        .eq('is_active', true)
+        .order('code')
+
+      // Get participants who paid this month
+      const { data: paymentsThisMonth } = await supabase
+        .from('payments')
+        .select(`
+          participant_id,
+          participant:participants(*)
+        `)
+        .eq('month', currentMonth)
+
+      const paidParticipantIds = new Set(paymentsThisMonth?.map(p => p.participant_id) || [])
+      
+      const paid = (allParticipants || []).filter(p => paidParticipantIds.has(p.id))
+      const unpaid = (allParticipants || []).filter(p => !paidParticipantIds.has(p.id))
+
+      setPaidParticipants(paid)
+      setUnpaidParticipants(unpaid)
+      setShowDetailModal(true)
+    } catch (error) {
+      console.error('Error loading payment details:', error)
+    } finally {
+      setDetailLoading(false)
     }
   }
 
@@ -141,10 +181,20 @@ export function Dashboard() {
             style={{ width: `${paymentRate}%` }}
           ></div>
         </div>
-        <div className="flex justify-between text-sm text-gray-600">
-          <span>{stats.paidThisMonth} pagaron</span>
-          <span>{paymentRate}%</span>
-          <span>{stats.pendingThisMonth} pendientes</span>
+        <div className="flex justify-between items-center">
+          <div className="flex justify-between text-sm text-gray-600 flex-1">
+            <span>{stats.paidThisMonth} pagaron</span>
+            <span>{paymentRate}%</span>
+            <span>{stats.pendingThisMonth} pendientes</span>
+          </div>
+          <button
+            onClick={loadPaymentDetails}
+            disabled={detailLoading}
+            className="ml-4 flex items-center space-x-1 bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600 transition-colors text-sm disabled:opacity-50"
+          >
+            <Eye className="w-4 h-4" />
+            <span>{detailLoading ? 'Cargando...' : 'Detalle'}</span>
+          </button>
         </div>
       </div>
 
@@ -178,6 +228,95 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Modal de detalle de pagos */}
+      {showDetailModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Detalle de Pagos del Mes Actual
+              </h2>
+              <button
+                onClick={() => setShowDetailModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Participantes que pagaron */}
+                <div className="bg-green-50 rounded-xl p-6">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                    <h3 className="text-lg font-semibold text-green-800">
+                      Pagaron ({paidParticipants.length})
+                    </h3>
+                  </div>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {paidParticipants.map((participant) => (
+                      <div
+                        key={participant.id}
+                        className="bg-white rounded-lg p-3 flex items-center space-x-3"
+                      >
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                          <span className="text-xs font-medium text-green-600">
+                            {participant.code}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{participant.full_name}</p>
+                          <p className="text-sm text-gray-500">Código: {participant.code}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {paidParticipants.length === 0 && (
+                      <p className="text-green-700 text-center py-4">
+                        No hay participantes que hayan pagado este mes
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Participantes pendientes */}
+                <div className="bg-red-50 rounded-xl p-6">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <XCircle className="w-6 h-6 text-red-600" />
+                    <h3 className="text-lg font-semibold text-red-800">
+                      Pendientes ({unpaidParticipants.length})
+                    </h3>
+                  </div>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {unpaidParticipants.map((participant) => (
+                      <div
+                        key={participant.id}
+                        className="bg-white rounded-lg p-3 flex items-center space-x-3"
+                      >
+                        <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                          <span className="text-xs font-medium text-red-600">
+                            {participant.code}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{participant.full_name}</p>
+                          <p className="text-sm text-gray-500">Código: {participant.code}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {unpaidParticipants.length === 0 && (
+                      <p className="text-red-700 text-center py-4">
+                        Todos los participantes han pagado este mes
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

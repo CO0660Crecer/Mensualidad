@@ -109,6 +109,32 @@ export function Reports() {
     document.body.removeChild(link)
   }
 
+  const groupPaymentsByReceipt = (payments: Payment[]) => {
+    const groups = new Map()
+    
+    payments.forEach(payment => {
+      const key = payment.receipt_number
+      
+      if (!groups.has(key)) {
+        groups.set(key, {
+          receipt_number: payment.receipt_number,
+          payment_date: payment.payment_date,
+          observations: payment.observations || '',
+          payments: [],
+          total_amount: 0
+        })
+      }
+
+      const group = groups.get(key)
+      group.payments.push(payment)
+      group.total_amount += payment.amount
+    })
+
+    return Array.from(groups.values()).sort((a, b) => 
+      new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()
+    )
+  }
+
   if (loading) {
     return (
       <div className="p-6">
@@ -247,46 +273,55 @@ export function Reports() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Participante
+                    Recibo
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Mes
+                    Participantes
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Monto
+                    Meses
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Monto Total
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Fecha Pago
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Recibo
+                    Observaciones
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredPayments.map((payment) => (
-                  <tr key={payment.id} className="hover:bg-gray-50">
+                {groupPaymentsByReceipt(filteredPayments).map((group) => (
+                  <tr key={group.receipt_number} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {payment.participant?.full_name}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {payment.participant?.code}
-                        </div>
+                      <div className="text-sm font-medium text-gray-900">
+                        #{group.receipt_number}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {getMonthName(payment.month)}
+                      <div className="space-y-1">
+                        {group.payments.map((payment, index) => (
+                          <div key={index} className="text-xs">
+                            <span className="font-mono text-blue-600">{payment.participant?.code}</span> - {payment.participant?.full_name}
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <div className="text-xs">
+                        {formatConsecutiveMonths(group.payments)}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                      {formatCurrency(payment.amount)}
+                      {formatCurrency(group.total_amount)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatDate(payment.payment_date)}
+                      {formatDate(group.payment_date)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {payment.receipt_number}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {group.observations || '-'}
                     </td>
                   </tr>
                 ))}

@@ -14,6 +14,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
     { id: 'dashboard', label: 'Dashboard', icon: Home, allowTutora: true },
     { id: 'participants', label: 'Participantes', icon: Users, allowTutora: true },
     { id: 'payments', label: 'Pagos', icon: CreditCard, allowTutora: true },
+    { id: 'consolidado', label: 'Consolidado', icon: BarChart3, allowTutora: true },
     { id: 'reports', label: 'Reportes', icon: BarChart3, allowTutora: false },
     { id: 'management', label: 'Administración', icon: FileText, allowTutora: false }
   ]

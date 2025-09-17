@@ -5,11 +5,12 @@ import { useAuth } from '../../hooks/useAuth'
 
 interface PaymentFormProps {
   payment?: Payment
+  preselectedParticipant?: Participant
   onClose: () => void
   onSave: () => void
 }
 
-export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
+export function PaymentForm({ payment, preselectedParticipant, onClose, onSave }: PaymentFormProps) {
   const [participants, setParticipants] = useState<Participant[]>([])
   const [formData, setFormData] = useState({
     participant_ids: [] as string[],
@@ -22,7 +23,10 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [showParticipants, setShowParticipants] = useState(false)
+  const [showMonths, setShowMonths] = useState(false)
   const { user } = useAuth()
+  const [paidMonths, setPaidMonths] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     loadParticipants()
@@ -36,17 +40,26 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
         receipt_number: payment.receipt_number,
         observations: ''
       })
+    } else if (preselectedParticipant) {
+      // Set preselected participant
+      const today = new Date().toISOString().slice(0, 10)
+      setFormData(prev => ({
+        ...prev,
+        participant_ids: [preselectedParticipant.id],
+        payment_date: today,
+        amount: '3000'
+      }))
+      // Load paid months for preselected participant
+      loadPaidMonths([preselectedParticipant.id])
     } else {
       // Set current month and today's date as defaults
       const now = new Date()
       const today = now.toISOString().slice(0, 10)
-      const currentMonth = now.getMonth() + 1
       
       setFormData(prev => ({
         ...prev,
         payment_date: today,
-        amount: '3000',
-        months: [currentMonth]
+        amount: '3000'
       }))
     }
   }, [payment])
@@ -144,6 +157,13 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
       participant_ids: newParticipantIds,
       amount: (3000 * newParticipantIds.length * prev.months.length).toString()
     }))
+    
+    // Cargar meses pagados para los participantes seleccionados
+    if (newParticipantIds.length > 0) {
+      loadPaidMonths(newParticipantIds)
+    } else {
+      setPaidMonths(new Set())
+    }
   }
 
   const handleMonthToggle = (month: number) => {
@@ -156,6 +176,30 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
       months: newMonths,
       amount: (3000 * prev.participant_ids.length * newMonths.length).toString()
     }))
+  }
+
+  const loadPaidMonths = async (participantIds: string[]) => {
+    try {
+      const currentYear = new Date().getFullYear()
+      
+      const { data: payments, error } = await supabase
+        .from('payments')
+        .select('month')
+        .in('participant_id', participantIds)
+        .like('month', `${currentYear}-%`)
+      
+      if (error) throw error
+      
+      const paidMonthsSet = new Set<number>()
+      payments?.forEach(payment => {
+        const month = parseInt(payment.month.split('-')[1])
+        paidMonthsSet.add(month)
+      })
+      
+      setPaidMonths(paidMonthsSet)
+    } catch (error) {
+      console.error('Error loading paid months:', error)
+    }
   }
 
   const getMonthName = (month: number) => {
@@ -201,8 +245,8 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
   const monthOptions = generateMonthOptions()
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md min-h-screen sm:min-h-0 sm:max-h-[95vh] overflow-hidden mt-0 sm:mt-4">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
             {isEdit ? 'Editar Pago' : 'Registrar Pago'}
@@ -216,12 +260,12 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
         </div>
 
         {error && (
-          <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <div className="mx-4 sm:mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-600 text-sm">{error}</p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto max-h-[calc(100vh-140px)] sm:max-h-[calc(95vh-140px)]">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <div className="flex items-center space-x-2">
@@ -234,7 +278,7 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
               <select
                 value={formData.participant_ids[0] || ''}
                 onChange={(e) => setFormData({ ...formData, participant_ids: [e.target.value] })}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
                 required
               >
                 <option value="">Seleccionar participante</option>
@@ -246,37 +290,59 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
               </select>
             ) : (
               <div>
-                <div className="relative mb-2">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Buscar participante por código o nombre..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  />
-                </div>
-                <div className="border border-gray-300 rounded-lg p-3 max-h-40 overflow-y-auto">
-                  {filteredParticipants.map((participant) => (
-                    <label
-                      key={participant.id}
-                      className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
-                        formData.participant_ids.includes(participant.id)
-                          ? 'bg-green-100 text-green-800'
-                          : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formData.participant_ids.includes(participant.id)}
-                        onChange={() => handleParticipantToggle(participant.id)}
-                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                      />
-                      <span className="text-sm font-mono text-blue-600">{participant.code}</span>
-                      <span className="text-sm">{participant.full_name}</span>
-                    </label>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowParticipants(!showParticipants)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-left flex items-center justify-between bg-white"
+                >
+                  <span className="text-sm">
+                    {formData.participant_ids.length > 0 
+                      ? `${formData.participant_ids.length} participante(s) seleccionado(s)`
+                      : 'Seleccionar participantes'
+                    }
+                  </span>
+                  <span className="text-gray-400">
+                    {showParticipants ? '▲' : '▼'}
+                  </span>
+                </button>
+                
+                {showParticipants && (
+                  <div className="mt-2 border border-gray-300 rounded-lg bg-white">
+                    <div className="p-3 border-b border-gray-200">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <input
+                          type="text"
+                          placeholder="Buscar..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      {filteredParticipants.map((participant) => (
+                        <label
+                          key={participant.id}
+                          className={`flex items-center space-x-2 p-3 cursor-pointer transition-colors border-b border-gray-100 last:border-b-0 ${
+                            formData.participant_ids.includes(participant.id)
+                              ? 'bg-green-50 text-green-800'
+                              : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.participant_ids.includes(participant.id)}
+                            onChange={() => handleParticipantToggle(participant.id)}
+                            className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                          />
+                          <span className="text-xs font-mono text-blue-600 min-w-0 flex-shrink-0">{participant.code}</span>
+                          <span className="text-sm truncate">{participant.full_name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -292,7 +358,7 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
               <select
                 value={formData.months[0] || ''}
                 onChange={(e) => setFormData({ ...formData, months: [parseInt(e.target.value)] })}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
                 required
               >
                 <option value="">Seleccionar mes</option>
@@ -303,27 +369,53 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
                 ))}
               </select>
             ) : (
-              <div className="border border-gray-300 rounded-lg p-3 max-h-40 overflow-y-auto">
-                <div className="grid grid-cols-2 gap-2">
-                  {monthOptions.map((month) => (
-                    <label
-                      key={month.value}
-                      className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
-                        formData.months.includes(month.value)
-                          ? 'bg-green-100 text-green-800'
-                          : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formData.months.includes(month.value)}
-                        onChange={() => handleMonthToggle(month.value)}
-                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                      />
-                      <span className="text-sm">{month.label}</span>
-                    </label>
-                  ))}
-                </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowMonths(!showMonths)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-left flex items-center justify-between bg-white"
+                >
+                  <span className="text-sm">
+                    {formData.months.length > 0 
+                      ? `${formData.months.length} mes(es) seleccionado(s)`
+                      : 'Seleccionar meses'
+                    }
+                  </span>
+                  <span className="text-gray-400">
+                    {showMonths ? '▲' : '▼'}
+                  </span>
+                </button>
+                
+                {showMonths && (
+                  <div className="mt-2 border border-gray-300 rounded-lg bg-white max-h-48 overflow-y-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-0">
+                      {monthOptions.map((month) => (
+                        <label
+                          key={month.value}
+                          className={`flex items-center space-x-2 p-3 cursor-pointer transition-colors border-b border-gray-100 ${
+                            paidMonths.has(month.value)
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : formData.months.includes(month.value)
+                              ? 'bg-green-50 text-green-800'
+                              : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.months.includes(month.value)}
+                            disabled={paidMonths.has(month.value)}
+                            onChange={() => handleMonthToggle(month.value)}
+                            className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 disabled:opacity-50"
+                          />
+                          <span className={`text-sm ${paidMonths.has(month.value) ? 'line-through' : ''}`}>
+                            {month.label}
+                            {paidMonths.has(month.value) && <span className="ml-1 text-xs">(Pagado)</span>}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -341,12 +433,12 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
               min="0"
               value={formData.amount}
               onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
               placeholder="3000"
               required
             />
             {(formData.months.length > 1 || formData.participant_ids.length > 1) && (
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-1">
                 {formatCurrency(3000)} × {formData.participant_ids.length} participantes × {formData.months.length} meses = {formatCurrency(3000 * formData.participant_ids.length * formData.months.length)}
               </p>
             )}
@@ -363,7 +455,7 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
               type="date"
               value={formData.payment_date}
               onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
               required
             />
           </div>
@@ -379,7 +471,7 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
               type="text"
               value={formData.receipt_number}
               onChange={(e) => setFormData({ ...formData, receipt_number: e.target.value })}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
               placeholder="Ej: REC-001, 12345"
               required
             />
@@ -395,24 +487,24 @@ export function PaymentForm({ payment, onClose, onSave }: PaymentFormProps) {
             <textarea
               value={formData.observations}
               onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
               placeholder="Ej: Pago correspondiente al año 2024, hermanos, etc."
               rows={3}
             />
           </div>
 
-          <div className="flex space-x-3 pt-4">
+          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 pt-4 sticky bottom-0 bg-white border-t border-gray-200 -mx-4 sm:-mx-6 px-4 sm:px-6 py-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              className="w-full sm:flex-1 px-4 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 transition-all duration-200"
+              className="w-full sm:flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 transition-all duration-200 text-sm font-medium"
             >
               {loading ? 'Guardando...' : (isEdit ? 'Actualizar' : 'Registrar')}
             </button>
